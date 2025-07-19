@@ -1,7 +1,28 @@
 import 'package:flutter/material.dart';
 
-class FeedbackPage extends StatelessWidget {
-  final TextEditingController feedbackController = TextEditingController();
+class FeedbackPage extends StatefulWidget {
+  @override
+  _FeedbackPageState createState() => _FeedbackPageState();
+}
+
+class _FeedbackPageState extends State<FeedbackPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  void _submitFeedback() {
+    String feedback = _controller.text.trim();
+    if (feedback.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please write something.")),
+      );
+      return;
+    }
+
+    // Here you can implement API to submit feedback to server/database.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Feedback submitted. Thank you!")),
+    );
+    _controller.clear();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -12,17 +33,24 @@ class FeedbackPage extends StatelessWidget {
         child: Column(
           children: [
             TextField(
-              controller: feedbackController,
+              controller: _controller,
               maxLines: 5,
-              decoration: InputDecoration(labelText: "Your feedback"),
+              decoration: InputDecoration(
+                hintText: "Write your feedback here...",
+                border: OutlineInputBorder(),
+              ),
             ),
-            SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () {
-                // Implement feedback submission logic later
-                Navigator.pop(context);
-              },
-              child: Text("Submit"),
+            SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: Icon(Icons.send),
+              label: Text("Submit"),
+              onPressed: _submitFeedback,
+              style: ElevatedButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ],
         ),

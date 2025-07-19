@@ -54,7 +54,6 @@ class DBHelper {
     await db.delete('favorites', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Dummy user functions
   Future<void> registerUser(String email, String password) async {
     final db = await database;
     await db.insert('users', {'email': email, 'password': password});

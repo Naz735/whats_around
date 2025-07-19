@@ -1,33 +1,55 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
 import 'register_page.dart';
+import 'home_screen.dart';
+import 'db_helper.dart';
 
-class LoginPage extends StatelessWidget {
+class LoginPage extends StatefulWidget {
+  @override
+  State<LoginPage> createState() => _LoginPageState();
+}
+
+class _LoginPageState extends State<LoginPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final dbHelper = DBHelper();
+  bool _isLoading = false;
 
-  LoginPage({super.key});
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   Future<void> _login(BuildContext context) async {
     String email = emailController.text.trim();
     String password = passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Please enter email and password")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Please enter email and password")));
       return;
     }
 
-    // TODO: Implement SQLite authentication check here
+    setState(() => _isLoading = true);
 
-    Navigator.pushReplacement(
-        context, MaterialPageRoute(builder: (context) => HomeScreen()));
+    bool success = await dbHelper.loginUser(email, password);
+
+    setState(() => _isLoading = false);
+
+    if (success) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => HomeScreen(isGuest: false)),
+      );
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Invalid email or password")));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       appBar: AppBar(title: Text("Login")),
       body: Padding(
@@ -37,30 +59,34 @@ class LoginPage extends StatelessWidget {
             TextField(
               controller: emailController,
               decoration: InputDecoration(labelText: "Email"),
-              style: TextStyle(color: isDark ? Colors.white : Colors.black),
             ),
             TextField(
               controller: passwordController,
               decoration: InputDecoration(labelText: "Password"),
               obscureText: true,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black),
             ),
             SizedBox(height: 10),
-            ElevatedButton(
-              onPressed: () => _login(context),
-              child: Text("Login"),
-            ),
+            _isLoading
+                ? CircularProgressIndicator()
+                : ElevatedButton(
+                    onPressed: () => _login(context),
+                    child: Text("Login"),
+                  ),
             TextButton(
               onPressed: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => RegisterPage()));
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => RegisterPage()),
+                );
               },
               child: Text("Register here"),
             ),
             TextButton(
               onPressed: () {
-                Navigator.pushReplacement(context,
-                    MaterialPageRoute(builder: (context) => HomeScreen()));
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(builder: (context) => HomeScreen(isGuest: true)),
+                );
               },
               child: Text("Continue as Guest"),
             ),

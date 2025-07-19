@@ -1,25 +1,27 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:async';
-import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'db_helper.dart';
+import 'place_detail_page.dart';
 
 class HomeScreen extends StatefulWidget {
+  final bool isGuest;
+  const HomeScreen({super.key, required this.isGuest});
+
   @override
-  _HomeScreenState createState() => _HomeScreenState();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final Completer<GoogleMapController> _controller = Completer();
+  final String apiKey = "AIzaSyBlmSxe2OE1EyYQPhm1jqZzPkvUZzR1l3o"; // 🔑 Replace with your actual API Key
   Position? currentPosition;
-  String selectedCategory = "all";
-  TextEditingController searchController = TextEditingController();
-
-  List<Map<String, dynamic>> allPlaces = [];
-  List<Map<String, dynamic>> displayedPlaces = [];
-  final String apiKey = "AIzaSyBlmSxe2OE1EyYQPhm1jqZzPkvUZzR1l3o"; // replace with your API key
+  List<Map<String, dynamic>> places = [];
+  String selectedCategory = "restaurant";
+  DBHelper dbHelper = DBHelper();
+  final Completer<GoogleMapController> _mapController = Completer();
 
   @override
   void initState() {
@@ -39,14 +41,14 @@ class _HomeScreenState extends State<HomeScreen> {
     if (permission == LocationPermission.deniedForever) return;
 
     currentPosition = await Geolocator.getCurrentPosition();
-    setState(() {});
-    _fetchPlaces("restaurant");
+    _fetchPlaces(selectedCategory);
   }
 
   Future<void> _fetchPlaces(String category) async {
     if (currentPosition == null) return;
 
-    String typeParam = category == "all" ? "" : "&type=$category";
+    String typeParam = category == "all" ? "&keyword=*" : "&type=$category";
+
     final url = Uri.parse(
       "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
       "?location=${currentPosition!.latitude},${currentPosition!.longitude}"
@@ -56,12 +58,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     final response = await http.get(url);
-
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       if (data["status"] == "OK") {
         setState(() {
-          allPlaces = List<Map<String, dynamic>>.from(data["results"].map((place) {
+          places = List<Map<String, dynamic>>.from(data["results"].map((place) {
             return {
               "name": place["name"],
               "lat": place["geometry"]["location"]["lat"],
@@ -69,144 +70,156 @@ class _HomeScreenState extends State<HomeScreen> {
               "vicinity": place["vicinity"] ?? "",
             };
           }));
-          displayedPlaces = List.from(allPlaces);
         });
-      } else {
-        print("Places API error: ${data["status"]}");
       }
-    } else {
-      print("Failed to fetch places");
     }
-  }
-
-  void _searchPlaces(String query) {
-    query = query.toLowerCase();
-    setState(() {
-      displayedPlaces = allPlaces.where((place) {
-        return place["name"].toLowerCase().contains(query);
-      }).toList();
-    });
   }
 
   Future<void> _bookmarkPlace(Map<String, dynamic> place) async {
-    // TODO: Save bookmark to SQLite database here
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("${place["name"]} bookmarked!")));
-  }
-
-  Future<void> _openMaps(double lat, double lng) async {
-    String googleMapsUrl = "https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=driving";
-    if (await canLaunch(googleMapsUrl)) {
-      await launch(googleMapsUrl);
-    } else {
-      throw 'Could not open the map.';
+    if (widget.isGuest) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please login to bookmark")),
+      );
+      return;
     }
+    await dbHelper.insertFavorite({
+      'name': place["name"],
+      'lat': place["lat"],
+      'lng': place["lng"],
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("${place["name"]} bookmarked!")),
+    );
   }
 
   void _filterCategory(String category) {
     setState(() {
       selectedCategory = category;
     });
-    if (category == "all") {
-      setState(() {
-        displayedPlaces = List.from(allPlaces);
-      });
-    } else {
-      _fetchPlaces(category);
-    }
+    _fetchPlaces(category);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text("What's Around Me?"),
-        backgroundColor: isDark ? Colors.grey[900] : Colors.blue,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Settings coming soon")));
-            },
-          )
-        ],
+      appBar: AppBar(title: Text("What's Around Me?")),
+      drawer: Drawer(
+        child: ListView(
+          children: [
+            DrawerHeader(
+              child: Text("Menu", style: TextStyle(fontSize: 24, color: Colors.white)),
+              decoration: BoxDecoration(color: Colors.blue),
+            ),
+            // 🔵 Bookmark visible to all, but check on tap
+            ListTile(
+              leading: Icon(Icons.bookmark),
+              title: Text("Bookmarks"),
+              onTap: () {
+                Navigator.of(context).pop(); // Close the drawer
+                if (widget.isGuest) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Please login to access bookmarks")),
+                  );
+                } else {
+                  Navigator.pushNamed(context, '/bookmarks');
+                }
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.settings),
+              title: Text("Settings"),
+              onTap: () {
+                Navigator.of(context).pop(); // Close the drawer
+                Navigator.pushNamed(context, '/settings');
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.logout),
+              title: Text("Logout"),
+              onTap: () {
+                Navigator.of(context).pop(); // Close the drawer
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+            ),
+          ],
+        ),
       ),
-      body: Column(
-        children: [
-          // Search Bar
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              controller: searchController,
-              onChanged: _searchPlaces,
-              decoration: InputDecoration(
-                hintText: "Search places by name...",
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-            ),
-          ),
-
-          // Category Buttons
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
+      body: currentPosition == null
+          ? Center(child: CircularProgressIndicator())
+          : Column(
               children: [
-                CategoryButton(icon: Icons.all_inclusive, label: "All", onTap: () => _filterCategory("all")),
-                CategoryButton(icon: Icons.restaurant, label: "Food", onTap: () => _filterCategory("restaurant")),
-                CategoryButton(icon: Icons.local_gas_station, label: "Gas", onTap: () => _filterCategory("gas_station")),
-                CategoryButton(icon: Icons.atm, label: "ATM", onTap: () => _filterCategory("atm")),
-                CategoryButton(icon: Icons.local_pharmacy, label: "Pharmacy", onTap: () => _filterCategory("pharmacy")),
-              ],
-            ),
-          ),
-
-          // Google Map Integration
-          currentPosition == null
-              ? CircularProgressIndicator()
-              : Container(
+                // 🔵 Map
+                Container(
                   height: 200,
                   child: GoogleMap(
                     initialCameraPosition: CameraPosition(
                       target: LatLng(currentPosition!.latitude, currentPosition!.longitude),
                       zoom: 14,
                     ),
-                    myLocationEnabled: true,
-                    onMapCreated: (GoogleMapController controller) {
-                      _controller.complete(controller);
+                    markers: places
+                        .map((place) => Marker(
+                              markerId: MarkerId(place["name"]),
+                              position: LatLng(place["lat"], place["lng"]),
+                              infoWindow: InfoWindow(title: place["name"]),
+                            ))
+                        .toSet(),
+                    onMapCreated: (controller) {
+                      _mapController.complete(controller);
                     },
                   ),
                 ),
 
-          // List of Nearby Places
-          Expanded(
-            child: ListView.builder(
-              itemCount: displayedPlaces.length,
-              itemBuilder: (context, index) {
-                var place = displayedPlaces[index];
-                return Card(
-                  margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-                  child: ListTile(
-                    leading: Icon(Icons.place, color: isDark ? Colors.white : Colors.blue),
-                    title: Text(place["name"]),
-                    subtitle: Text(place["vicinity"]),
-                    trailing: IconButton(
-                      icon: Icon(Icons.bookmark),
-                      onPressed: () => _bookmarkPlace(place),
+                // 🔵 Filter Buttons
+                Container(
+                  color: Colors.grey[200],
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        CategoryButton(icon: Icons.all_inclusive, label: "All", onTap: () => _filterCategory("all")),
+                        CategoryButton(icon: Icons.restaurant, label: "Food", onTap: () => _filterCategory("restaurant")),
+                        CategoryButton(icon: Icons.local_gas_station, label: "Gas", onTap: () => _filterCategory("gas_station")),
+                        CategoryButton(icon: Icons.atm, label: "ATM", onTap: () => _filterCategory("atm")),
+                        CategoryButton(icon: Icons.local_pharmacy, label: "Pharmacy", onTap: () => _filterCategory("pharmacy")),
+                      ],
                     ),
-                    onTap: () {
-                      _openMaps(place["lat"], place["lng"]);
-                    },
                   ),
-                );
-              },
+                ),
+
+                // 🔵 List of Places
+                Expanded(
+                  child: places.isEmpty
+                      ? Center(child: Text("No places found"))
+                      : ListView.builder(
+                          itemCount: places.length,
+                          itemBuilder: (context, index) {
+                            var place = places[index];
+                            return Card(
+                              margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                              child: ListTile(
+                                leading: Icon(Icons.place),
+                                title: Text(place["name"]),
+                                subtitle: Text(place["vicinity"]),
+                                trailing: IconButton(
+                                  icon: Icon(Icons.bookmark),
+                                  onPressed: () => _bookmarkPlace(place),
+                                ),
+                                onTap: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PlaceDetailPage(place: place),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -216,16 +229,17 @@ class CategoryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  CategoryButton({required this.icon, required this.label, required this.onTap});
+  const CategoryButton({super.key, required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6.0),
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
       child: ElevatedButton.icon(
-        onPressed: onTap,
         icon: Icon(icon),
         label: Text(label),
+        onPressed: onTap,
+        style: ElevatedButton.styleFrom(padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8)),
       ),
     );
   }

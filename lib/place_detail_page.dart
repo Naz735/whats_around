@@ -1,22 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'directions_service.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 class PlaceDetailPage extends StatelessWidget {
   final Map place;
+  final String apiKey = "YOUR_REAL_API_KEY"; // replace with valid key
 
-  const PlaceDetailPage({super.key, required this.place});
+  PlaceDetailPage({required this.place});
+
+  Future<void> _getDirections(BuildContext context) async {
+    Position currentPosition = await Geolocator.getCurrentPosition();
+    final url = Uri.parse(
+      "https://maps.googleapis.com/maps/api/directions/json"
+      "?origin=${currentPosition.latitude},${currentPosition.longitude}"
+      "&destination=${place["lat"]},${place["lng"]}"
+      "&key=$apiKey",
+    );
+
+    final response = await http.get(url);
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data["status"] == "OK" && data["routes"].isNotEmpty) {
+        var leg = data["routes"][0]["legs"][0];
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: Text("Route Info"),
+            content: Text("Distance: ${leg["distance"]["text"]}, Duration: ${leg["duration"]["text"]}"),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text("OK"),
+              )
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("No directions found")),
+        );
+      }
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Failed to get directions")),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    double destLat = place["lat"];
-    double destLng = place["lng"];
-    DirectionsService directionsService = DirectionsService();
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(place["name"]),
-      ),
+      appBar: AppBar(title: Text(place["name"])),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -28,35 +63,7 @@ class PlaceDetailPage extends StatelessWidget {
             ElevatedButton.icon(
               icon: Icon(Icons.directions),
               label: Text("Get Directions"),
-              onPressed: () async {
-                Position currentPosition = await Geolocator.getCurrentPosition();
-
-                var directions = await directionsService.getDirections(
-                  currentPosition.latitude,
-                  currentPosition.longitude,
-                  destLat,
-                  destLng,
-                );
-
-                if (directions != null) {
-                  var route = directions["routes"][0];
-                  var leg = route["legs"][0];
-                  print("Distance: ${leg["distance"]["text"]}, Duration: ${leg["duration"]["text"]}");
-                  showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(
-                      title: Text("Route Info"),
-                      content: Text("Distance: ${leg["distance"]["text"]}, Duration: ${leg["duration"]["text"]}"),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text("OK"),
-                        )
-                      ],
-                    ),
-                  );
-                }
-              },
+              onPressed: () => _getDirections(context),
             ),
           ],
         ),
