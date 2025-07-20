@@ -110,7 +110,6 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text("Menu", style: TextStyle(fontSize: 24, color: Colors.white)),
               decoration: BoxDecoration(color: Colors.blue),
             ),
-            // 🔵 Bookmark visible to all, but check on tap
             ListTile(
               leading: Icon(Icons.bookmark),
               title: Text("Bookmarks"),
@@ -187,36 +186,46 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
-                // 🔵 List of Places
+                // 🔵 List of Places with Pull-to-Refresh
                 Expanded(
-                  child: places.isEmpty
-                      ? Center(child: Text("No places found"))
-                      : ListView.builder(
-                          itemCount: places.length,
-                          itemBuilder: (context, index) {
-                            var place = places[index];
-                            return Card(
-                              margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                              child: ListTile(
-                                leading: Icon(Icons.place),
-                                title: Text(place["name"]),
-                                subtitle: Text(place["vicinity"]),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.bookmark),
-                                  onPressed: () => _bookmarkPlace(place),
-                                ),
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PlaceDetailPage(place: place),
-                                    ),
-                                  );
-                                },
+                  child: RefreshIndicator(
+                    onRefresh: () => _fetchPlaces(selectedCategory),
+                    child: places.isEmpty
+                        ? ListView(
+                            children: [
+                              SizedBox(
+                                height: 400,
+                                child: Center(child: Text("No places found")),
                               ),
-                            );
-                          },
-                        ),
+                            ],
+                          )
+                        : ListView.builder(
+                            itemCount: places.length,
+                            itemBuilder: (context, index) {
+                              var place = places[index];
+                              return Card(
+                                margin: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                                child: ListTile(
+                                  leading: Icon(Icons.place),
+                                  title: Text(place["name"]),
+                                  subtitle: Text(place["vicinity"]),
+                                  trailing: IconButton(
+                                    icon: Icon(Icons.bookmark),
+                                    onPressed: () => _bookmarkPlace(place),
+                                  ),
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => PlaceDetailPage(place: place),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              );
+                            },
+                          ),
+                  ),
                 ),
               ],
             ),
