@@ -1,49 +1,37 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 class PlaceDetailPage extends StatelessWidget {
   final Map place;
-  final String apiKey = "YOUR_REAL_API_KEY"; // replace with valid key
 
   PlaceDetailPage({required this.place});
 
   Future<void> _getDirections(BuildContext context) async {
-    Position currentPosition = await Geolocator.getCurrentPosition();
-    final url = Uri.parse(
-      "https://maps.googleapis.com/maps/api/directions/json"
-      "?origin=${currentPosition.latitude},${currentPosition.longitude}"
-      "&destination=${place["lat"]},${place["lng"]}"
-      "&key=$apiKey",
-    );
+    try {
+      // Get current position
+      Position currentPosition = await Geolocator.getCurrentPosition();
 
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      if (data["status"] == "OK" && data["routes"].isNotEmpty) {
-        var leg = data["routes"][0]["legs"][0];
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: Text("Route Info"),
-            content: Text("Distance: ${leg["distance"]["text"]}, Duration: ${leg["duration"]["text"]}"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("OK"),
-              )
-            ],
-          ),
-        );
+      // Build Google Maps directions URL
+      final double destLat = place["lat"];
+      final double destLng = place["lng"];
+      final url = Uri.parse(
+        "https://www.google.com/maps/dir/?api=1"
+        "&origin=${currentPosition.latitude},${currentPosition.longitude}"
+        "&destination=$destLat,$destLng"
+        "&travelmode=driving"
+      );
+
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("No directions found")),
+          SnackBar(content: Text("Could not open Google Maps")),
         );
       }
-    } else {
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Failed to get directions")),
+        SnackBar(content: Text("Error: $e")),
       );
     }
   }
