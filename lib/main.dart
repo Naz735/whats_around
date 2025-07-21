@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
 import 'bookmark_page.dart';
 import 'settings_page.dart';
 import 'feedback_page.dart';
-import 'login_page.dart'; // <-- Add this import
+import 'login_page.dart';
+import 'splash_screen.dart'; // <-- Add this import
 
 void main() {
   runApp(MyApp());
@@ -31,10 +31,9 @@ class _MyAppState extends State<MyApp> {
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
-      initialRoute: '/login', // Start at login page
+      home: SplashScreen(),
       routes: {
-        '/login': (context) => LoginPage(), // Uses your login_page.dart
-        '/': (context) => HomeScreen(isGuest: false),
+        '/login': (context) => LoginPage(),
         '/bookmarks': (context) => BookmarkPage(),
         '/settings': (context) => SettingsPage(
               isDarkMode: isDarkMode,
